@@ -189,7 +189,7 @@ class _PickerControlAppState extends State<PickerControlApp> {
               syncUserId: _user?.uid,
               onAccountPressed: _showAccountDialog,
               profileName: _profileName!,
-            )
+            ),
     );
   }
 }
@@ -212,10 +212,14 @@ class _WelcomeScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 72,
-                  color: Theme.of(context).colorScheme.primary,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Image.asset(
+                    'assets/branding/mypocket_icon.png',
+                    width: 92,
+                    height: 92,
+                    fit: BoxFit.cover,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Text(
@@ -324,7 +328,7 @@ class _NameSetupScreenState extends State<_NameSetupScreen> {
                   textInputAction: TextInputAction.done,
                   decoration: const InputDecoration(
                     labelText: 'Tu nombre',
-                    hintText: 'Ej.: Camila',
+                    hintText: 'Ej.: Angelica',
                     prefixIcon: Icon(Icons.person_outline),
                   ),
                   onSubmitted: (_) => _continue(),
@@ -608,8 +612,7 @@ class _HomeShellState extends State<HomeShell> {
         .listen(
           (snapshot) => _syncCloud(
             scheduleEventNotifications: snapshot.docChanges.any(
-              (change) =>
-                  change.doc.data()?['table'] == 'calendar_events',
+              (change) => change.doc.data()?['table'] == 'calendar_events',
             ),
           ),
           onError: (Object error) {
@@ -694,11 +697,16 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  Future<void> _addOrEditExpense({ExpenseEntry? expense, String? day}) async {
+  Future<void> _addOrEditExpense({
+    ExpenseEntry? expense,
+    String? day,
+    ExpensePaymentMethod initialPaymentMethod = ExpensePaymentMethod.debit,
+  }) async {
     final result = await showDialog<ExpenseEntry>(
       context: context,
       builder: (context) => ExpenseFormDialog(
         expense: expense,
+        initialPaymentMethod: initialPaymentMethod,
         initialDay: day ?? dayKey(_selectedDay),
       ),
     );
@@ -712,11 +720,17 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  Future<void> _addOrEditDebt({DebtEntry? debt}) async {
+  Future<void> _addOrEditDebt({
+    DebtEntry? debt,
+    DebtType initialType = DebtType.monthly,
+  }) async {
     final result = await showDialog<DebtEntry>(
       context: context,
-      builder: (context) =>
-          DebtFormDialog(debt: debt, initialDay: dayKey(_selectedDay)),
+      builder: (context) => DebtFormDialog(
+        debt: debt,
+        initialType: initialType,
+        initialDay: dayKey(_selectedDay),
+      ),
     );
     if (result != null) {
       await _mutate(
@@ -792,15 +806,12 @@ class _HomeShellState extends State<HomeShell> {
   );
 
   Future<void> _billCardForMonth(DateTime month) async {
-    await _mutate(
-      () async {
-        await AppDatabase.instance.billCardCycle(
-          month: monthKey(month),
-          billingDay: widget.settings.cardBillingDay,
-        );
-      },
-      successMessage: 'Facturación de tarjeta registrada',
-    );
+    await _mutate(() async {
+      await AppDatabase.instance.billCardCycle(
+        month: monthKey(month),
+        billingDay: widget.settings.cardBillingDay,
+      );
+    }, successMessage: 'Facturación de tarjeta registrada');
   }
 
   Future<void> _toggleDebtClosed(DebtEntry debt) async {
@@ -1237,11 +1248,13 @@ class _HomeShellState extends State<HomeShell> {
                 DebtsTab(
                   month: _selectedMonth,
                   debts: _debts,
+                  expenses: _expenses,
+                  cardBillingDay: widget.settings.cardBillingDay,
                   debtPaymentAmounts: _debtPaymentAmounts,
                   debtDueDays: _debtDueDays,
                   onMonthChanged: (month) =>
                       setState(() => _selectedMonth = month),
-                  onAddDebt: () => _addOrEditDebt(),
+                  onAddDebt: (type) => _addOrEditDebt(initialType: type),
                   onEditDebt: (debt) => _addOrEditDebt(debt: debt),
                   onDeleteDebt: (debt) => _deleteItem(
                     label: 'la deuda ${debt.title}',
@@ -1456,11 +1469,12 @@ class DashboardTab extends StatelessWidget {
                   month.year * 100 + month.month,
         )
         .fold<int>(0, (total, expense) => total + expense.amount);
-    final outstandingDebt = totalOutstandingDebtAmount(
-      debts: debts,
-      throughMonth: DateTime.now(),
-      paidAmountsByStatusKey: debtPaymentAmounts,
-    ) +
+    final outstandingDebt =
+        totalOutstandingDebtAmount(
+          debts: debts,
+          throughMonth: DateTime.now(),
+          paidAmountsByStatusKey: debtPaymentAmounts,
+        ) +
         expenses
             .where(
               (expense) =>

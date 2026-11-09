@@ -170,11 +170,13 @@ class _FinanceTabState extends State<FinanceTab> {
   }
 }
 
-class DebtsTab extends StatelessWidget {
+class DebtsTab extends StatefulWidget {
   const DebtsTab({
     super.key,
     required this.month,
     required this.debts,
+    required this.expenses,
+    required this.cardBillingDay,
     required this.debtPaymentAmounts,
     required this.debtDueDays,
     required this.onMonthChanged,
@@ -189,10 +191,12 @@ class DebtsTab extends StatelessWidget {
 
   final DateTime month;
   final List<DebtEntry> debts;
+  final List<ExpenseEntry> expenses;
+  final int cardBillingDay;
   final Map<String, int> debtPaymentAmounts;
   final Map<String, String> debtDueDays;
   final ValueChanged<DateTime> onMonthChanged;
-  final VoidCallback onAddDebt;
+  final ValueChanged<DebtType> onAddDebt;
   final ValueChanged<DebtEntry> onEditDebt;
   final ValueChanged<DebtEntry> onDeleteDebt;
   final ValueChanged<DebtOccurrence> onSetDebtPaid;
@@ -200,10 +204,17 @@ class DebtsTab extends StatelessWidget {
   final ValueChanged<DateTime> onBillCard;
   final ValueChanged<DebtEntry> onCloseDebt;
 
+  @override
+  State<DebtsTab> createState() => _DebtsTabState();
+}
+
+class _DebtsTabState extends State<DebtsTab> {
+  int _section = 0;
+
   Future<void> _pickMonth(BuildContext context) async {
     final selected = await showDatePicker(
       context: context,
-      initialDate: month,
+      initialDate: widget.month,
       firstDate: DateTime(2015),
       lastDate: DateTime(2100),
       initialDatePickerMode: DatePickerMode.year,
@@ -211,113 +222,194 @@ class DebtsTab extends StatelessWidget {
       helpText: 'Busca un mes del historial',
     );
     if (selected != null) {
-      onMonthChanged(DateTime(selected.year, selected.month));
+      widget.onMonthChanged(DateTime(selected.year, selected.month));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final occurrences = debtOccurrencesForMonth(
-      debts,
-      month,
-      paidAmountsByStatusKey: debtPaymentAmounts,
-      dueDaysByStatusKey: debtDueDays,
+      widget.debts,
+      widget.month,
+      paidAmountsByStatusKey: widget.debtPaymentAmounts,
+      dueDaysByStatusKey: widget.debtDueDays,
     )..sort((a, b) => a.dueDay.compareTo(b.dueDay));
-    final debtTotal = occurrences.fold<int>(
+    final monthlyOccurrences = occurrences
+        .where((item) => item.debt.type == DebtType.monthly)
+        .toList();
+    final cardOccurrences = occurrences
+        .where((item) => item.debt.type == DebtType.installments)
+        .toList();
+    final cardExpenses = cardExpensesForBillingMonth(
+      expenses: widget.expenses,
+      month: widget.month,
+      billingDay: widget.cardBillingDay,
+    );
+    final monthlyTotal = monthlyOccurrences.fold<int>(
       0,
       (total, occurrence) =>
-          total + (occurrence.amount - occurrence.paidAmount).clamp(0, occurrence.amount),
+          total +
+          (occurrence.amount - occurrence.paidAmount).clamp(
+            0,
+            occurrence.amount,
+          ),
     );
+    final cardInstallmentTotal = cardOccurrences.fold<int>(
+      0,
+      (total, occurrence) => total + occurrence.amount,
+    );
+    final cardExpenseTotal = cardExpenses.fold<int>(
+      0,
+      (total, expense) => total + expense.amount,
+    );
+    final pendingCardInstallmentTotal = cardOccurrences
+        .where((occurrence) => !occurrence.isPaid)
+        .fold<int>(0, (total, occurrence) => total + occurrence.amount);
+    final pendingCardExpenseTotal = cardExpenses
+        .where((expense) => !expense.cardBilled)
+        .fold<int>(0, (total, expense) => total + expense.amount);
+    final pendingCardTotal =
+        pendingCardInstallmentTotal + pendingCardExpenseTotal;
+    final monthlyDebts = widget.debts
+        .where((debt) => debt.type == DebtType.monthly)
+        .toList();
+    final installmentDebts = widget.debts
+        .where((debt) => debt.type == DebtType.installments)
+        .toList();
+    final visibleInstallmentDebts = installmentDebts
+        .where(
+          (debt) => cardOccurrences.any(
+            (occurrence) => occurrence.debt.id == debt.id,
+          ),
+        )
+        .toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
       children: [
         _FinanceMonthPicker(
-          month: month,
-          onPrevious: () => onMonthChanged(
-            DateTime(month.year, month.month - 1),
+          month: widget.month,
+          onPrevious: () => widget.onMonthChanged(
+            DateTime(widget.month.year, widget.month.month - 1),
           ),
-          onNext: () => onMonthChanged(DateTime(month.year, month.month + 1)),
+          onNext: () => widget.onMonthChanged(
+            DateTime(widget.month.year, widget.month.month + 1),
+          ),
           onPick: () => _pickMonth(context),
         ),
         const SizedBox(height: 16),
-        _FinanceTotalCard(
-          icon: Icons.event_repeat_outlined,
-          label: 'Pagos y cuotas de este mes',
-          amount: debtTotal,
-          tint: Theme.of(context).colorScheme.primaryContainer,
-          iconColor: Theme.of(context).colorScheme.primary,
-        ),
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: () => onBillCard(month),
-          icon: const Icon(Icons.credit_score_outlined),
-          label: const Text('Facturación realizada'),
-        ),
-        const SizedBox(height: 16),
-        _SectionHeading(
-          title: 'Tarjeta de crédito',
-          subtitle: 'Cuotas pendientes del ciclo seleccionado.',
-          buttonLabel: 'Agregar deuda',
-          onAdd: onAddDebt,
-        ),
-        ...debts
-            .where((debt) => debt.type == DebtType.installments)
-            .map(
-              (debt) => _DebtSummaryCard(
-                debt: debt,
-                monthOccurrences: occurrences
-                    .where((item) => item.debt.id == debt.id)
-                    .toList(),
-                onEdit: () => onEditDebt(debt),
-                onDelete: () => onDeleteDebt(debt),
-                onClose: () => onCloseDebt(debt),
-                onSetPaid: onSetDebtPaid,
-                onSetDueDay: onSetDebtDueDay,
-              ),
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(
+              value: 0,
+              label: Text('Pago del mes', maxLines: 1),
+              icon: Icon(Icons.event_repeat_outlined),
             ),
-        if (!debts.any((debt) => debt.type == DebtType.installments))
-          const _FinanceEmpty(
-            icon: Icons.credit_card_outlined,
-            title: 'Sin cuotas registradas',
-            message: 'Agrega aquí compras con tarjeta en varias cuotas.',
-          )
-        ,
-        const SizedBox(height: 16),
-        _SectionHeading(
-          title: 'Pago del mes',
-          subtitle: 'Compromisos mensuales como cuentas o pagos familiares.',
-          buttonLabel: 'Agregar pago',
-          onAdd: onAddDebt,
+            ButtonSegment(
+              value: 1,
+              label: Text('Tarjeta', maxLines: 1),
+              icon: Icon(Icons.credit_card_outlined),
+            ),
+          ],
+          selected: {_section},
+          onSelectionChanged: (selection) =>
+              setState(() => _section = selection.first),
         ),
-        ...debts
-            .where((debt) => debt.type == DebtType.monthly)
-            .map(
+        const SizedBox(height: 16),
+        if (_section == 0) ...[
+          _FinanceTotalCard(
+            icon: Icons.event_repeat_outlined,
+            label: 'Pagos pendientes del mes',
+            amount: monthlyTotal,
+            tint: Theme.of(context).colorScheme.primaryContainer,
+            iconColor: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 16),
+          _SectionHeading(
+            title: 'Compromisos mensuales',
+            subtitle: 'Cuentas y pagos que se repiten cada mes.',
+            buttonLabel: 'Agregar pago',
+            onAdd: () => widget.onAddDebt(DebtType.monthly),
+          ),
+          ...monthlyDebts.map(
             (debt) => _DebtSummaryCard(
               debt: debt,
-              monthOccurrences: occurrences
+              monthOccurrences: monthlyOccurrences
                   .where((item) => item.debt.id == debt.id)
                   .toList(),
-              onEdit: () => onEditDebt(debt),
-              onDelete: () => onDeleteDebt(debt),
-              onClose: () => onCloseDebt(debt),
-              onSetPaid: onSetDebtPaid,
-              onSetDueDay: onSetDebtDueDay,
+              onEdit: () => widget.onEditDebt(debt),
+              onDelete: () => widget.onDeleteDebt(debt),
+              onClose: () => widget.onCloseDebt(debt),
+              onSetPaid: widget.onSetDebtPaid,
+              onSetDueDay: widget.onSetDebtDueDay,
             ),
           ),
-        if (!debts.any((debt) => debt.type == DebtType.monthly))
-          const _FinanceEmpty(
-            icon: Icons.event_repeat_outlined,
-            title: 'Sin pagos mensuales',
-            message: 'Agrega aquí tus compromisos mensuales.',
+          if (monthlyDebts.isEmpty)
+            const _FinanceEmpty(
+              icon: Icons.event_repeat_outlined,
+              title: 'Sin pagos mensuales',
+              message: 'Agrega aquí tus compromisos mensuales.',
+            ),
+        ] else ...[
+          _FinanceTotalCard(
+            icon: Icons.credit_card_outlined,
+            label: 'Tarjeta por pagar este mes',
+            amount: cardInstallmentTotal + cardExpenseTotal,
+            tint: Theme.of(context).colorScheme.primaryContainer,
+            iconColor: Theme.of(context).colorScheme.primary,
           ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: pendingCardTotal == 0
+                ? null
+                : () => widget.onBillCard(widget.month),
+            icon: const Icon(Icons.credit_score_outlined),
+            label: const Text('Facturación realizada'),
+          ),
+          const SizedBox(height: 16),
+          _SectionHeading(
+            title: 'Compras en varias cuotas',
+            subtitle:
+                'Solo se muestran aquí las compras financiadas en varias cuotas.',
+            buttonLabel: 'Agregar deuda',
+            onAdd: () => widget.onAddDebt(DebtType.installments),
+          ),
+          ...visibleInstallmentDebts.map(
+            (debt) => _DebtSummaryCard(
+              debt: debt,
+              monthOccurrences: cardOccurrences
+                  .where((item) => item.debt.id == debt.id)
+                  .toList(),
+              onEdit: () => widget.onEditDebt(debt),
+              onDelete: () => widget.onDeleteDebt(debt),
+              onClose: () => widget.onCloseDebt(debt),
+              onSetPaid: widget.onSetDebtPaid,
+              onSetDueDay: widget.onSetDebtDueDay,
+            ),
+          ),
+          if (visibleInstallmentDebts.isEmpty)
+            const _FinanceEmpty(
+              icon: Icons.payments_outlined,
+              title: 'Sin compras en cuotas',
+              message: 'Agrega aquí tus compras financiadas en varias cuotas.',
+            ),
+          const SizedBox(height: 8),
+          Text(
+            'Los gastos marcados como crédito se suman automáticamente al total por facturar y permanecen en el historial de Finanzas.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
         Text(
-          'Las deudas pendientes se muestran aquí y solo afectan tu saldo cuando registras su pago.',
+          _section == 0
+              ? 'Los pagos mensuales se descuentan de tu dinero cuando registras su pago.'
+              : 'Las compras a una cuota y las cuotas pendientes se descuentan al registrar la facturación.',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ],
     );

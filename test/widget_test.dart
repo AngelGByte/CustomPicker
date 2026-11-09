@@ -1,4 +1,5 @@
-// This is a basic Flutter widget test.
+// Thi
+//s is a basic Flutter widget test.
 //
 // To perform an interaction with a widget in your test, use the WidgetTester
 // utility in the flutter_test package. For example, you can send tap and scroll
@@ -7,12 +8,221 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:picker_control/finance_tab.dart';
+import 'package:picker_control/formatters.dart';
 import 'package:picker_control/forms.dart';
 import 'package:picker_control/models.dart';
 import 'package:picker_control/settings_dialog.dart';
 
 void main() {
+  setUpAll(() async {
+    await initializeDateFormatting('es');
+  });
+
+  testWidgets(
+    'credit expenses are included in billing total but not listed as debts',
+    (tester) async {
+      final debt = DebtEntry(
+        id: 91,
+        title: 'Notebook',
+        notes: '',
+        type: DebtType.installments,
+        amount: 30000,
+        startDay: '2026-11-01',
+        installmentCount: 3,
+        endMonth: null,
+      );
+      const expense = ExpenseEntry(
+        id: 92,
+        category: 'Comida',
+        title: 'Compra con crédito',
+        day: '2026-11-03',
+        amount: 12500,
+        notes: '',
+        paymentMethod: ExpensePaymentMethod.credit,
+      );
+      const billedExpense = ExpenseEntry(
+        id: 93,
+        category: 'Transporte',
+        title: 'Compra ya facturada',
+        day: '2026-10-28',
+        amount: 5000,
+        notes: '',
+        paymentMethod: ExpensePaymentMethod.credit,
+        cardBilled: true,
+        cardBilledMonth: '2026-11',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DebtsTab(
+              month: DateTime(2026, 11),
+              debts: [debt],
+              expenses: const [expense, billedExpense],
+              cardBillingDay: 5,
+              debtPaymentAmounts: const {'91:2026-11': 10000},
+              debtDueDays: const {},
+              onMonthChanged: (_) {},
+              onAddDebt: (_) {},
+              onEditDebt: (_) {},
+              onDeleteDebt: (_) {},
+              onSetDebtPaid: (_) {},
+              onSetDebtDueDay: (_) {},
+              onBillCard: (_) {},
+              onCloseDebt: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(SegmentedButton<int>),
+          matching: find.text('Tarjeta'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Compra con crédito'), findsNothing);
+      expect(find.text('Notebook'), findsOneWidget);
+      expect(find.text(formatMoney(27500)), findsOneWidget);
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Facturación realizada'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'finance history shows only expenses and income for the chosen month',
+    (tester) async {
+      var month = DateTime(2026, 11);
+      const expenses = [
+        ExpenseEntry(
+          id: 101,
+          category: 'Comida',
+          title: 'Gasto noviembre',
+          day: '2026-11-12',
+          amount: 1000,
+          notes: '',
+        ),
+        ExpenseEntry(
+          id: 102,
+          category: 'Comida',
+          title: 'Gasto diciembre',
+          day: '2026-12-12',
+          amount: 2000,
+          notes: '',
+        ),
+      ];
+      const incomes = [
+        OtherIncomeEntry(
+          id: 103,
+          source: 'Ingreso noviembre',
+          day: '2026-11-13',
+          amount: 3000,
+          notes: '',
+        ),
+        OtherIncomeEntry(
+          id: 104,
+          source: 'Ingreso diciembre',
+          day: '2026-12-13',
+          amount: 4000,
+          notes: '',
+        ),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) => Scaffold(
+              body: FinanceTab(
+                month: month,
+                expenses: expenses,
+                otherIncomes: incomes,
+                onMonthChanged: (value) => setState(() => month = value),
+                onAddExpense: () {},
+                onEditExpense: (_) {},
+                onDeleteExpense: (_) {},
+                onAddOtherIncome: () {},
+                onEditOtherIncome: (_) {},
+                onDeleteOtherIncome: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Gasto noviembre'), findsOneWidget);
+      expect(find.text('Gasto diciembre'), findsNothing);
+      await tester.tap(find.byTooltip('Mes siguiente'));
+      await tester.pumpAndSettle();
+      expect(find.text('Gasto noviembre'), findsNothing);
+      expect(find.text('Gasto diciembre'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(SegmentedButton<int>),
+          matching: find.text('Ingresos'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Ingreso diciembre'), findsOneWidget);
+      expect(find.text('Ingreso noviembre'), findsNothing);
+    },
+  );
+
+  testWidgets('installment count can be selected from 3 to 24', (tester) async {
+    DebtEntry? result;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                result = await showDialog<DebtEntry>(
+                  context: context,
+                  builder: (context) => DebtFormDialog(
+                    initialType: DebtType.installments,
+                    initialDay: '2026-11-09',
+                  ),
+                );
+              },
+              child: const Text('Agregar'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Agregar'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
+
+    final installmentSelector = tester.widget<DropdownButton<int>>(
+      find.byType(DropdownButton<int>),
+    );
+    expect(
+      installmentSelector.items!.map((item) => item.value),
+      List.generate(22, (index) => index + 3),
+    );
+    installmentSelector.onChanged!(24);
+    await tester.pump();
+    await tester.enterText(find.byType(TextFormField).at(0), 'Compra');
+    await tester.enterText(find.byType(TextFormField).at(1), '24000');
+    await tester.tap(find.text('Guardar deuda'));
+    await tester.pumpAndSettle();
+
+    expect(result?.installmentCount, 24);
+  });
+
   testWidgets('appearance settings select dark mode and accent color', (
     tester,
   ) async {
@@ -185,14 +395,27 @@ void main() {
       title: 'Tarjeta',
       notes: '',
       type: DebtType.installments,
-      amount: 50000,
+      amount: 30000,
       startDay: '2026-01-15',
-      installmentCount: 2,
+      installmentCount: 3,
       endMonth: null,
     );
 
-    expect(debtOccurrenceForMonth(debt, DateTime(2026, 2))?.amount, 25000);
-    expect(debtOccurrenceForMonth(debt, DateTime(2026, 3)), isNull);
+    final february = debtOccurrenceForMonth(debt, DateTime(2026, 2));
+    final paidFinalMonth = debtOccurrencesForMonth(
+      [debt],
+      DateTime(2026, 3),
+      paidAmountsByStatusKey: const {'9:2026-03': 10000},
+    );
+    final monthAfterFinalPayment = debtOccurrencesForMonth(
+      [debt],
+      DateTime(2026, 4),
+      paidAmountsByStatusKey: const {'9:2026-03': 10000},
+    );
+
+    expect(february?.amount, 10000);
+    expect(paidFinalMonth.single.isPaid, isTrue);
+    expect(monthAfterFinalPayment, isEmpty);
   });
 
   test('2026 SII retention estimate uses 15.25 percent', () {
@@ -215,17 +438,11 @@ void main() {
     );
 
     expect(event.startsAt, DateTime(2026, 11, 9, 10, 30));
-    expect(
-      CalendarEvent.fromMap(event.toMap()).notify,
-      isTrue,
-    );
+    expect(CalendarEvent.fromMap(event.toMap()).notify, isTrue);
     final restored = CalendarEvent.fromMap(event.toMap());
     expect(restored.startTime, '10:30');
     expect(restored.reminderMinutes, 30);
-    expect(
-      restored.notificationAt,
-      DateTime(2026, 11, 9, 10),
-    );
+    expect(restored.notificationAt, DateTime(2026, 11, 9, 10));
     final legacyMap = event.toMap()..remove('reminder_minutes');
     expect(CalendarEvent.fromMap(legacyMap).reminderMinutes, 0);
   });
@@ -267,35 +484,19 @@ void main() {
 
   test('order payouts group work into the configured invoice dates', () {
     expect(
-      orderPayoutDueDay(
-        '2026-11-05',
-        firstPayoutDay: 6,
-        secondPayoutDay: 21,
-      ),
+      orderPayoutDueDay('2026-11-05', firstPayoutDay: 6, secondPayoutDay: 21),
       '2026-11-06',
     );
     expect(
-      orderPayoutDueDay(
-        '2026-11-06',
-        firstPayoutDay: 6,
-        secondPayoutDay: 21,
-      ),
+      orderPayoutDueDay('2026-11-06', firstPayoutDay: 6, secondPayoutDay: 21),
       '2026-11-21',
     );
     expect(
-      orderPayoutDueDay(
-        '2026-11-20',
-        firstPayoutDay: 6,
-        secondPayoutDay: 21,
-      ),
+      orderPayoutDueDay('2026-11-20', firstPayoutDay: 6, secondPayoutDay: 21),
       '2026-11-21',
     );
     expect(
-      orderPayoutDueDay(
-        '2026-11-21',
-        firstPayoutDay: 6,
-        secondPayoutDay: 21,
-      ),
+      orderPayoutDueDay('2026-11-21', firstPayoutDay: 6, secondPayoutDay: 21),
       '2026-12-06',
     );
   });
@@ -352,19 +553,70 @@ void main() {
   });
 
   test('credit card billing day begins the next cycle on or after cutoff', () {
-    expect(
-      cardExpenseBillingMonth(day: '2026-11-04', billingDay: 5),
-      202611,
-    );
-    expect(
-      cardExpenseBillingMonth(day: '2026-11-05', billingDay: 5),
-      202612,
-    );
-    expect(
-      cardExpenseBillingMonth(day: '2026-12-01', billingDay: 5),
-      202612,
-    );
+    expect(cardExpenseBillingMonth(day: '2026-11-04', billingDay: 5), 202611);
+    expect(cardExpenseBillingMonth(day: '2026-11-05', billingDay: 5), 202612);
+    expect(cardExpenseBillingMonth(day: '2026-12-01', billingDay: 5), 202612);
   });
+
+  test(
+    'single-payment credit expenses are grouped into their billing cycle',
+    () {
+      final expenses = [
+        const ExpenseEntry(
+          id: 31,
+          category: 'Comida',
+          title: 'Compra antes del cierre',
+          day: '2026-11-04',
+          amount: 12500,
+          notes: '',
+          paymentMethod: ExpensePaymentMethod.credit,
+        ),
+        const ExpenseEntry(
+          id: 32,
+          category: 'Comida',
+          title: 'Compra después del cierre',
+          day: '2026-11-05',
+          amount: 8000,
+          notes: '',
+          paymentMethod: ExpensePaymentMethod.credit,
+        ),
+        const ExpenseEntry(
+          id: 33,
+          category: 'Hogar',
+          title: 'Débito',
+          day: '2026-11-04',
+          amount: 1000,
+          notes: '',
+          paymentMethod: ExpensePaymentMethod.debit,
+        ),
+        const ExpenseEntry(
+          id: 34,
+          category: 'Salud',
+          title: 'Compra facturada',
+          day: '2026-10-30',
+          amount: 5000,
+          notes: '',
+          paymentMethod: ExpensePaymentMethod.credit,
+          cardBilled: true,
+          cardBilledMonth: '2026-11',
+        ),
+      ];
+
+      final novemberCycle = cardExpensesForBillingMonth(
+        expenses: expenses,
+        month: DateTime(2026, 11),
+        billingDay: 5,
+      );
+      final decemberCycle = cardExpensesForBillingMonth(
+        expenses: expenses,
+        month: DateTime(2026, 12),
+        billingDay: 5,
+      );
+
+      expect(novemberCycle.map((expense) => expense.id), [31, 34]);
+      expect(decemberCycle.map((expense) => expense.id), [32]);
+    },
+  );
 
   test('credit expense retains payment and billing-cycle details', () {
     const expense = ExpenseEntry(

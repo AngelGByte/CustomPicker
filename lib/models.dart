@@ -31,15 +31,14 @@ class AppThemeSettings {
     int? firstPayoutDay,
     int? secondPayoutDay,
     int? cardBillingDay,
-  }) =>
-      AppThemeSettings(
-        darkMode: darkMode ?? this.darkMode,
-        accentColor: accentColor ?? this.accentColor,
-        withholdingPercent: withholdingPercent ?? this.withholdingPercent,
-        firstPayoutDay: firstPayoutDay ?? this.firstPayoutDay,
-        secondPayoutDay: secondPayoutDay ?? this.secondPayoutDay,
-        cardBillingDay: cardBillingDay ?? this.cardBillingDay,
-      );
+  }) => AppThemeSettings(
+    darkMode: darkMode ?? this.darkMode,
+    accentColor: accentColor ?? this.accentColor,
+    withholdingPercent: withholdingPercent ?? this.withholdingPercent,
+    firstPayoutDay: firstPayoutDay ?? this.firstPayoutDay,
+    secondPayoutDay: secondPayoutDay ?? this.secondPayoutDay,
+    cardBillingDay: cardBillingDay ?? this.cardBillingDay,
+  );
 }
 
 class AccentColorOption {
@@ -340,9 +339,11 @@ DebtOccurrence? debtOccurrenceForMonth(
 
   final dueDate = DateTime.parse(debt.startDay);
   final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-  final dueDay = dueDayOverride ?? dayKey(
-    DateTime(month.year, month.month, dueDate.day.clamp(1, daysInMonth)),
-  );
+  final dueDay =
+      dueDayOverride ??
+      dayKey(
+        DateTime(month.year, month.month, dueDate.day.clamp(1, daysInMonth)),
+      );
   if (debt.type == DebtType.installments &&
       (debt.installmentCount == null || index >= debt.installmentCount!)) {
     return null;
@@ -376,8 +377,7 @@ List<DebtOccurrence> debtOccurrencesForMonth(
         month,
         paidAmount:
             paidAmountsByStatusKey['${debt.id}:${monthKey(month)}'] ?? 0,
-        dueDayOverride:
-            dueDaysByStatusKey['${debt.id}:${monthKey(month)}'],
+        dueDayOverride: dueDaysByStatusKey['${debt.id}:${monthKey(month)}'],
       ),
     )
     .whereType<DebtOccurrence>()
@@ -455,10 +455,9 @@ List<PendingPayout> pendingOrderPayouts({
     add(shift.day, shift.bonus);
   }
   return grossByDueDay.entries
-      .map((entry) => PendingPayout(
-            dueDay: entry.key,
-            grossAmount: entry.value,
-          ))
+      .map(
+        (entry) => PendingPayout(dueDay: entry.key, grossAmount: entry.value),
+      )
       .where((payout) => payout.grossAmount > 0)
       .toList()
     ..sort((a, b) => a.dueDay.compareTo(b.dueDay));
@@ -486,10 +485,7 @@ String orderPayoutDueDay(
   return dayKey(DateTime(date.year, date.month + 1, firstPayoutDay));
 }
 
-int cardExpenseBillingMonth({
-  required String day,
-  required int billingDay,
-}) {
+int cardExpenseBillingMonth({required String day, required int billingDay}) {
   if (billingDay < 1 || billingDay > 28) {
     throw ArgumentError.value(billingDay, 'billingDay');
   }
@@ -503,6 +499,23 @@ int cardExpenseBillingMonth({
       ? statementDate
       : DateTime(statementDate.year, statementDate.month + 1, billingDay);
   return billingMonth.year * 100 + billingMonth.month;
+}
+
+List<ExpenseEntry> cardExpensesForBillingMonth({
+  required List<ExpenseEntry> expenses,
+  required DateTime month,
+  required int billingDay,
+}) {
+  final selectedMonth = monthKey(month);
+  final selectedCycle = month.year * 100 + month.month;
+  return expenses.where((expense) {
+    if (expense.paymentMethod != ExpensePaymentMethod.credit) return false;
+    if (expense.cardBilledMonth != null) {
+      return expense.cardBilledMonth == selectedMonth;
+    }
+    return cardExpenseBillingMonth(day: expense.day, billingDay: billingDay) ==
+        selectedCycle;
+  }).toList();
 }
 
 int totalOutstandingDebtAmount({

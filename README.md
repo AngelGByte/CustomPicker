@@ -30,13 +30,21 @@ Identificador móvil de pruebas: `com.mypocket.app`.
 - Registro de otros ingresos recibidos, como el sueldo de otro trabajo.
 - Registro, edición y eliminación de gastos puntuales con categoría, nota y
   método de pago: débito descuenta el saldo al instante y crédito queda para la
-  siguiente facturación.
+  siguiente facturación. Los gastos con crédito se conservan en su historial
+  mensual de Finanzas y se agregan automáticamente al total de la tarjeta, sin
+  duplicarse como deudas individuales.
 - Deudas separadas entre tarjeta de crédito (cuotas) y pagos del mes
   (compromisos recurrentes). Cada vencimiento tiene una fecha editable por mes
-  y solo se descuenta del saldo al registrar el pago.
+  y solo se descuenta del saldo al registrar el pago. Las compras en cuotas
+  permiten elegir entre 3 y 24 pagos; al terminar, dejan de mostrarse en los
+  meses siguientes, pero siguen visibles como pagadas al consultar su mes
+  histórico.
 - La acción «Facturación realizada» marca los gastos de crédito del ciclo y
   las cuotas correspondientes como pagados, descontándolos del dinero actual.
-  El día de facturación inicial es el 5 y se puede cambiar en Ajustes.
+  El total de tarjeta conserva el importe completo del ciclo, aunque una parte
+  ya se haya facturado o pagado; el botón solo está disponible mientras queden
+  cargos pendientes. El día de facturación inicial es el 5 y se puede cambiar
+  en Ajustes.
 - Historial de pedidos, turnos y gastos consultable por mes o en todo el año.
 - Calendario navegable por mes y año con turnos, pedidos, gastos, vencimientos
   de deudas, notas y eventos con hora de inicio, descripción y notificación

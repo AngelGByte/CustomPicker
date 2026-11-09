@@ -338,9 +338,15 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
 const expenseCategories = ['Hogar', 'Comida', 'Transporte', 'Salud', 'Otros'];
 
 class ExpenseFormDialog extends StatefulWidget {
-  const ExpenseFormDialog({super.key, this.expense, required this.initialDay});
+  const ExpenseFormDialog({
+    super.key,
+    this.expense,
+    this.initialPaymentMethod = ExpensePaymentMethod.debit,
+    required this.initialDay,
+  });
 
   final ExpenseEntry? expense;
+  final ExpensePaymentMethod initialPaymentMethod;
   final String initialDay;
 
   @override
@@ -367,7 +373,7 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
     _notesController = TextEditingController(text: expense?.notes ?? '');
     _day = expense?.day ?? widget.initialDay;
     _category = expense?.category ?? expenseCategories.last;
-    _paymentMethod = expense?.paymentMethod ?? ExpensePaymentMethod.debit;
+    _paymentMethod = expense?.paymentMethod ?? widget.initialPaymentMethod;
   }
 
   @override
@@ -642,9 +648,15 @@ class _OtherIncomeFormDialogState extends State<OtherIncomeFormDialog> {
 }
 
 class DebtFormDialog extends StatefulWidget {
-  const DebtFormDialog({super.key, this.debt, required this.initialDay});
+  const DebtFormDialog({
+    super.key,
+    this.debt,
+    this.initialType = DebtType.monthly,
+    required this.initialDay,
+  });
 
   final DebtEntry? debt;
+  final DebtType initialType;
   final String initialDay;
 
   @override
@@ -655,10 +667,10 @@ class _DebtFormDialogState extends State<DebtFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _amountController;
-  late final TextEditingController _installmentsController;
   late final TextEditingController _notesController;
   late String _startDay;
   late DebtType _type;
+  late int? _installmentCount;
 
   @override
   void initState() {
@@ -668,19 +680,16 @@ class _DebtFormDialogState extends State<DebtFormDialog> {
     _amountController = TextEditingController(
       text: debt == null ? '' : '${debt.amount}',
     );
-    _installmentsController = TextEditingController(
-      text: debt?.installmentCount?.toString() ?? '',
-    );
     _notesController = TextEditingController(text: debt?.notes ?? '');
     _startDay = debt?.startDay ?? widget.initialDay;
-    _type = debt?.type ?? DebtType.monthly;
+    _type = debt?.type ?? widget.initialType;
+    _installmentCount = debt?.installmentCount ?? 3;
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _amountController.dispose();
-    _installmentsController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -753,22 +762,30 @@ class _DebtFormDialogState extends State<DebtFormDialog> {
               ),
               if (_type == DebtType.installments) ...[
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _installmentsController,
-                  keyboardType: TextInputType.number,
+                DropdownButtonFormField<int>(
+                  initialValue: _installmentCount,
                   decoration: const InputDecoration(
                     labelText: 'Cantidad de cuotas',
-                    hintText: 'Ej.: 12',
                     prefixIcon: Icon(Icons.format_list_numbered),
                   ),
-                  validator: (value) {
-                    if (_type != DebtType.installments) return null;
-                    final count = int.tryParse(value ?? '');
-                    if (count == null || count <= 0) {
-                      return 'Ingresa una cantidad de cuotas mayor a 0';
-                    }
-                    return null;
-                  },
+                  items: [
+                    if (_installmentCount != null &&
+                        (_installmentCount! < 3 || _installmentCount! > 24))
+                      DropdownMenuItem(
+                        value: _installmentCount,
+                        child: Text('${_installmentCount!} cuotas (actual)'),
+                      ),
+                    for (var count = 3; count <= 24; count++)
+                      DropdownMenuItem(
+                        value: count,
+                        child: Text('$count cuotas'),
+                      ),
+                  ],
+                  onChanged: (count) =>
+                      setState(() => _installmentCount = count),
+                  validator: (count) => count == null
+                      ? 'Selecciona la cantidad de cuotas'
+                      : null,
                 ),
               ],
               const SizedBox(height: 12),
@@ -812,7 +829,7 @@ class _DebtFormDialogState extends State<DebtFormDialog> {
               amount: int.parse(_amountController.text),
               startDay: _startDay,
               installmentCount: _type == DebtType.installments
-                  ? int.parse(_installmentsController.text)
+                  ? _installmentCount
                   : null,
               endMonth: widget.debt?.endMonth,
             ),
@@ -1034,9 +1051,7 @@ class _CalendarEventFormDialogState extends State<CalendarEventFormDialog> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Notificarme'),
-                subtitle: const Text(
-                  'Recibirás un aviso antes del evento',
-                ),
+                subtitle: const Text('Recibirás un aviso antes del evento'),
                 value: _notify,
                 onChanged: (value) => setState(() => _notify = value),
               ),
