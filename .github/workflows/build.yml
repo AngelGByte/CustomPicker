@@ -1,0 +1,61 @@
+name: Build APK & IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ── APK para Android ──
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - run: flutter pub get
+      - run: flutter test
+      - run: flutter build apk --release
+
+      - name: Renombrar APK
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //')
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             "build/app/outputs/flutter-apk/MyPocket-${VERSION}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/MyPocket-*.apk
+
+  # ── IPA para iOS (sin firma, para sideload con AltStore) ──
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - run: flutter pub get
+      - run: flutter test
+
+      - name: Compilar iOS sin firma
+        run: flutter build ios --release --no-codesign
+
+      - name: Empaquetar como IPA
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //')
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r -9 "MyPocket-${VERSION}.ipa" Payload
+          echo "IPA_FILE=MyPocket-${VERSION}.ipa" >> $GITHUB_ENV
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: "*.ipa"
