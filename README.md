@@ -113,6 +113,4 @@ identificador de paquete se cambió durante esta etapa de pruebas, así que una
 instalación con el nuevo identificador no hereda los datos locales de la app
 anterior.
 
-La app también incluye el proyecto de iOS y una extensión WidgetKit, pero
-compilar, firmar o publicar para iOS requiere macOS con Xcode y la configuración
-de App Groups para el equipo de Apple correspondiente.
+La app también incluye el proyecto de iOS y una extensión WidgetKit. Se cuenta con un flujo automatizado de CI/CD en GitHub Actions (`.github/workflows/build.yml`) que compila en paralelo el APK para Android y el `.ipa` para iOS en cada `push` a la rama `main`, empaquetando los artefactos listos para su descarga e instalación directa (vía ADB en Android o Sideloadly/AltStore en iOS).
