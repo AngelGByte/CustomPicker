@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "177824191246",
+    "project_id": "mypocket-514200",
+    "storage_bucket": "mypocket-514200.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:177824191246:android:1105a89caf17a78856bd5f",
+        "android_client_info": {
+          "package_name": "com.mypocket.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "177824191246-25e60ebqb11lpjvrjpjo3ti3n9avlngc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mypocket.app",
+            "certificate_hash": "bbeaba76507bc2f6908802a5a553d837b71f2e54"
+          }
+        },
+        {
+          "client_id": "177824191246-aqm06812ef5tjfn3sq3umg33nmuh1n6o.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDh0JcaN5KFVKF4m1EugdUjISradZ4k1UU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "177824191246-aqm06812ef5tjfn3sq3umg33nmuh1n6o.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "177824191246-fohe2mp2bkattfkm6hvkfhatpklvmf5k.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mypocket.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
